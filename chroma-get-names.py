@@ -32,66 +32,96 @@ def main():
     pp = pprint.PrettyPrinter()
     pp.pprint(data)
 
-    format_as_dot(data)
+    format_as_dot(data, 'chroma-names-leaves.dot', True)
+    format_as_dot(data, 'chroma-names-trunk.dot', False)
+
+    format_as_tikz(data, 'chroma-names-leaves.tex', True)
+    format_as_tikz(data, 'chroma-names-trunk.tex', False)
 
 
 
 def enter(data, bits, name):
     it = data
-    for i, bit in zip(itertools.count(), bits):
-        is_leaf = i == len(bits) - 1
+    for bit in bits + [name]:
         if not bit in it:
-            if is_leaf:
-                print(bits, bit)
-                it[bit] = []
-            else:
-                it[bit] = {}
-
-        if is_leaf:
-            try:
-                it[bit].append(name)
-            except AttributeError as e:
-                print(bits)
-                print(name)
-                raise
-        else:
-            it = it[bit]
+            it[bit] = {}
+        it = it[bit]
 
 
-def format_as_dot(data):
-    with open('chroma-names.dot', 'w') as f:
+def format_as_dot(data, filename, leaves=True):
+    with open(filename, 'w') as f:
         f.write('''digraph {
+            overlap = false;
             rankdir = LR;
             ''')
-        f.write('\n'.join(_format_as_dot(data)))
+        f.write('\n'.join(_format_as_dot(data, leaves=leaves)))
         f.write('\n}')
 
 
 def get_prefix_key(prefix, key):
-    return prefix + '-' + key
+    return (prefix + 'x' + key).replace('_', 'x')
 
 
 def unique(data):
     return list(set(data))
 
 
-def _format_as_dot(subtree, prefix=''):
+def _format_as_dot(subtree, prefix='', leaves=True):
     lines = []
     for key, vals in sorted(subtree.items()):
-        prefix_key = get_prefix_key(prefix, key)
-        lines.append('"{}" [label="{}"];'.format(prefix_key, key))
-        if isinstance(vals, dict):
-            for val in sorted(vals.keys()):
-                lines.append('"{}" -> "{}";'.format(prefix_key, get_prefix_key(prefix_key, val)))
 
-            lines += _format_as_dot(vals, prefix_key)
-        elif isinstance(vals, list):
-            for val in sorted(unique(vals)):
-                lines.append('"{}" [shape=box, label="{}"];'.format(get_prefix_key(prefix_key, val), val))
-                lines.append('"{}" -> "{}";'.format(prefix_key, get_prefix_key(prefix_key, val)))
+        prefix_key = get_prefix_key(prefix, key)
+
+        if leaves or len(vals.keys()) != 0:
+            lines.append('"{}" [label="{}"{}];'.format(
+                prefix_key,
+                key,
+                'shape=box' if len(vals.keys()) == 0 else '',
+            ))
+
+
+        for key2, val2 in sorted(vals.items()):
+            if leaves or len(val2.keys()) != 0:
+                lines.append('"{}" -> "{}";'.format(prefix_key, get_prefix_key(prefix_key, key2)))
+
+        if not leaves and len(vals.keys()) == 0:
+            continue
+
+        lines += _format_as_dot(vals, prefix_key, leaves)
 
     return lines
 
+
+def format_as_tikz(data, filename, leaves):
+    with open(filename, 'w') as f:
+        f.write(r'''\begin{tikzpicture}
+    \graph[branch down=2cm, grow right sep=1cm] {
+''')
+        f.write('\n'.join(indent(_format_as_tikz(data, leaves=leaves), 2)))
+        f.write('''
+    };
+\end{tikzpicture}''')
+
+
+def _format_as_tikz(subtree, prefix='', leaves=True, level=3):
+    lines = []
+    for key, val in sorted(subtree.items()):
+        prefix_key = get_prefix_key(prefix, key)
+        escaped = key.replace('_', r'\_')
+        if len(val.keys()) == 0:
+            #lines.append('{}/"{}",'.format(prefix_key, escaped))
+            lines.append('{},'.format(prefix_key))
+        else:
+            #lines.append('{}/"{}" -> {{'.format(prefix_key, escaped))
+            lines.append('{} -> {{'.format(prefix_key))
+            lines += indent(_format_as_tikz(val, prefix_key))
+            lines.append('},')
+
+    return lines
+
+
+def indent(lines, level=1):
+    return ['    '*level + line for line in lines]
 
 
 def _parse_args():
