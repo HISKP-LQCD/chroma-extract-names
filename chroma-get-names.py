@@ -38,6 +38,8 @@ def main():
     format_as_tikz(data, 'chroma-names-leaves.tex', True)
     format_as_tikz(data, 'chroma-names-trunk.tex', False)
 
+    format_as_latex(data, 'chroma-names-list.tex')
+
 
 
 def enter(data, bits, name):
@@ -79,7 +81,6 @@ def _format_as_dot(subtree, prefix='', leaves=True):
                 'shape=box' if len(vals.keys()) == 0 else '',
             ))
 
-
         for key2, val2 in sorted(vals.items()):
             if leaves or len(val2.keys()) != 0:
                 lines.append('"{}" -> "{}";'.format(prefix_key, get_prefix_key(prefix_key, key2)))
@@ -118,6 +119,40 @@ def _format_as_tikz(subtree, prefix='', leaves=True, level=3):
             lines.append('},')
 
     return lines
+
+
+def format_as_latex(subtree, filename):
+    results = _format_as_latex(subtree)
+    with open(filename, 'w') as f:
+        for key, vals in sorted(results.items()):
+            f.write(r'\needspace{8\baselineskip}' + '\n')
+            f.write(r'\textbf{' + key[len('/lib'):].replace('_', r'\_\-') + '}\n')
+            maxlen = max(len(val) for val in vals)
+            threshold = 31
+            if maxlen < threshold:
+                f.write(r'\begin{multicols}{2}' + '\n')
+            f.write(r'\begin{itemize}[noitemsep]' + '\n')
+            for val in sorted(vals):
+                f.write(r'\item \texttt{' + val.replace('_', r'\_') + '}\n')
+            f.write(r'\end{itemize}' + '\n\n')
+            if maxlen < threshold:
+                f.write(r'\end{multicols}' + '\n')
+
+
+
+def _format_as_latex(subtree, prefix='', leaves=True):
+    results = {}
+    for key, val in sorted(subtree.items()):
+        prefix_key = prefix + '/' + key
+        escaped = key.replace('_', r'\_')
+        if len(val.keys()) == 0:
+            if not prefix in results:
+                results[prefix] = []
+            results[prefix].append(key)
+        else:
+            results.update(_format_as_latex(val, prefix_key))
+
+    return results
 
 
 def indent(lines, level=1):
